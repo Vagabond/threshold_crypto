@@ -2,7 +2,7 @@
 
 // Clippy warns that it's dangerous to derive `PartialEq` and explicitly implement `Hash`, but the
 // `pairing::bls12_381` types don't implement `Hash`, so we can't derive it.
-#![allow(clippy::derive_hash_xor_eq)]
+#![allow(clippy::derived_hash_with_manual_eq)]
 // When using the mocktography, the resulting field elements become wrapped `u32`s, suddenly
 // triggering pass-by-reference warnings. They are conditionally disabled for this reason:
 #![cfg_attr(
@@ -105,7 +105,7 @@ impl fmt::Debug for PublicKey {
 
 impl PartialOrd for PublicKey {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(&other))
+        Some(self.cmp(other))
     }
 }
 
@@ -216,8 +216,8 @@ impl PublicKeyShare {
 
     /// Combines two public key shares to one (basically adds the two commitments)
     pub fn combine(&self, other: PublicKeyShare) -> PublicKeyShare {
-        let mut commit = self.0.clone().0;
-        commit.add_assign(&other.0.clone().0);
+        let mut commit = self.0.0;
+        commit.add_assign(&other.0.0);
         PublicKeyShare(PublicKey(commit))
     }
 
@@ -241,7 +241,7 @@ pub struct Signature(G2);
 
 impl PartialOrd for Signature {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(&other))
+        Some(self.cmp(other))
     }
 }
 
@@ -275,7 +275,7 @@ impl Signature {
     pub fn parity(&self) -> bool {
         let uncomp = self.0.into_affine().into_uncompressed();
         let xor_bytes: u8 = uncomp.as_ref().iter().fold(0, |result, byte| result ^ byte);
-        let parity = 0 != xor_bytes.count_ones() % 2;
+        let parity = !xor_bytes.count_ones().is_multiple_of(2);
         debug!("Signature: {:0.10}, parity: {}", HexFmt(uncomp), parity);
         parity
     }
@@ -462,7 +462,7 @@ impl fmt::Debug for SecretKeyShare {
 }
 
 /// Allow combining two `SecretKeyShare` together
-impl<'a, 'b> Add<&'b SecretKeyShare> for &'a SecretKeyShare {
+impl<'b> Add<&'b SecretKeyShare> for &SecretKeyShare {
     type Output = SecretKeyShare;
     fn add(self, other: &'b SecretKeyShare) -> SecretKeyShare {
         let priv_key_1 = self.clone().0;
@@ -540,7 +540,7 @@ impl Hash for Ciphertext {
 
 impl PartialOrd for Ciphertext {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(&other))
+        Some(self.cmp(other))
     }
 }
 
@@ -1061,13 +1061,13 @@ mod tests {
 
         // Test PublicKey serialization
         let ser_pk = pk.to_bytes();
-        let deser_pk = PublicKey::from_bytes(&ser_pk).expect("deserialize public key");
+        let deser_pk = PublicKey::from_bytes(ser_pk).expect("deserialize public key");
         assert_eq!(ser_pk.len(), PK_SIZE);
         assert_eq!(pk, deser_pk);
 
         // Test Signature serialization
         let ser_sig = sig.to_bytes();
-        let deser_sig = Signature::from_bytes(&ser_sig).expect("deserialize signature");
+        let deser_sig = Signature::from_bytes(ser_sig).expect("deserialize signature");
         assert_eq!(ser_sig.len(), SIG_SIZE);
         assert_eq!(sig, deser_sig);
     }
@@ -1266,7 +1266,7 @@ mod zkcrypto_interop_tests {
         let zk_bytes = zk_affine.to_compressed();
 
         // Deserialize with our crate
-        let our_pk = PublicKey::from_bytes(&zk_bytes).expect("failed to deserialize zkcrypto G1");
+        let our_pk = PublicKey::from_bytes(zk_bytes).expect("failed to deserialize zkcrypto G1");
 
         // Serialize back with our crate
         let our_bytes = our_pk.to_bytes();
@@ -1282,7 +1282,7 @@ mod zkcrypto_interop_tests {
         let zk_bytes = zk_affine.to_compressed();
 
         // Deserialize with our crate
-        let our_sig = Signature::from_bytes(&zk_bytes).expect("failed to deserialize zkcrypto G2");
+        let our_sig = Signature::from_bytes(zk_bytes).expect("failed to deserialize zkcrypto G2");
 
         // Serialize back with our crate
         let our_bytes = our_sig.to_bytes();

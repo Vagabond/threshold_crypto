@@ -80,7 +80,7 @@ impl<B: Borrow<Poly>> ops::AddAssign<B> for Poly {
     }
 }
 
-impl<'a, B: Borrow<Poly>> ops::Add<B> for &'a Poly {
+impl<B: Borrow<Poly>> ops::Add<B> for &Poly {
     type Output = Poly;
 
     fn add(self, rhs: B) -> Poly {
@@ -97,7 +97,7 @@ impl<B: Borrow<Poly>> ops::Add<B> for Poly {
     }
 }
 
-impl<'a> ops::Add<Fr> for Poly {
+impl ops::Add<Fr> for Poly {
     type Output = Poly;
 
     fn add(mut self, rhs: Fr) -> Self::Output {
@@ -111,7 +111,7 @@ impl<'a> ops::Add<Fr> for Poly {
     }
 }
 
-impl<'a> ops::Add<u64> for Poly {
+impl ops::Add<u64> for Poly {
     type Output = Poly;
 
     fn add(self, rhs: u64) -> Self::Output {
@@ -133,7 +133,7 @@ impl<B: Borrow<Poly>> ops::SubAssign<B> for Poly {
     }
 }
 
-impl<'a, B: Borrow<Poly>> ops::Sub<B> for &'a Poly {
+impl<B: Borrow<Poly>> ops::Sub<B> for &Poly {
     type Output = Poly;
 
     fn sub(self, rhs: B) -> Poly {
@@ -152,7 +152,7 @@ impl<B: Borrow<Poly>> ops::Sub<B> for Poly {
 
 // Clippy thinks using `+` in a `Sub` implementation is suspicious.
 #[allow(clippy::suspicious_arithmetic_impl)]
-impl<'a> ops::Sub<Fr> for Poly {
+impl ops::Sub<Fr> for Poly {
     type Output = Poly;
 
     fn sub(self, mut rhs: Fr) -> Self::Output {
@@ -161,7 +161,7 @@ impl<'a> ops::Sub<Fr> for Poly {
     }
 }
 
-impl<'a> ops::Sub<u64> for Poly {
+impl ops::Sub<u64> for Poly {
     type Output = Poly;
 
     fn sub(self, rhs: u64) -> Self::Output {
@@ -171,7 +171,7 @@ impl<'a> ops::Sub<u64> for Poly {
 
 // Clippy thinks using any `+` and `-` in a `Mul` implementation is suspicious.
 #[allow(clippy::suspicious_arithmetic_impl)]
-impl<'a, B: Borrow<Poly>> ops::Mul<B> for &'a Poly {
+impl<B: Borrow<Poly>> ops::Mul<B> for &Poly {
     type Output = Poly;
 
     fn mul(self, rhs: B) -> Self::Output {
@@ -221,7 +221,7 @@ impl ops::MulAssign<Fr> for Poly {
     }
 }
 
-impl<'a> ops::Mul<&'a Fr> for Poly {
+impl ops::Mul<&Fr> for Poly {
     type Output = Poly;
 
     fn mul(mut self, rhs: &Fr) -> Self::Output {
@@ -252,7 +252,7 @@ impl<'a> ops::Mul<&'a Fr> for &'a Poly {
     }
 }
 
-impl<'a> ops::Mul<Fr> for &'a Poly {
+impl ops::Mul<Fr> for &Poly {
     type Output = Poly;
 
     fn mul(self, rhs: Fr) -> Self::Output {
@@ -291,7 +291,7 @@ impl Poly {
     /// constructor in every way except that this constructor will return an `Err` where
     /// `try_random` would return an error.
     pub fn try_random<R: Rng>(degree: usize, rng: &mut R) -> Result<Self> {
-        if degree == usize::max_value() {
+        if degree == usize::MAX {
             return Err(Error::DegreeTooHigh);
         }
         let coeff: Vec<Fr> = repeat_with(|| Fr::random(rng)).take(degree + 1).collect();
@@ -330,8 +330,7 @@ impl Poly {
 
     /// Returns the (monic) monomial: `x.pow(degree)`.
     pub fn monomial(degree: usize) -> Self {
-        let coeff: Vec<Fr> = iter::repeat(Fr::zero())
-            .take(degree)
+        let coeff: Vec<Fr> = std::iter::repeat_n(Fr::zero(), degree)
             .chain(iter::once(Fr::one()))
             .collect();
         Poly::from(coeff)
@@ -352,11 +351,9 @@ impl Poly {
 
     /// Returns the unique polynomial `f` of degree `samples.len() - 1` with the given values
     /// `(x, f(x))`. Expects samples to be a vector of two tuple Field representation elements.
-    pub fn interpolate_from_fr(samples: Vec<(Fr, Fr)>) -> Self
-    {
+    pub fn interpolate_from_fr(samples: Vec<(Fr, Fr)>) -> Self {
         Poly::compute_interpolation(&samples)
     }
-
 
     /// Returns the degree.
     pub fn degree(&self) -> usize {
@@ -443,7 +440,7 @@ pub struct Commitment {
 
 impl PartialOrd for Commitment {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(&other))
+        Some(self.cmp(other))
     }
 }
 
@@ -479,7 +476,7 @@ impl<B: Borrow<Commitment>> ops::AddAssign<B> for Commitment {
     }
 }
 
-impl<'a, B: Borrow<Commitment>> ops::Add<B> for &'a Commitment {
+impl<B: Borrow<Commitment>> ops::Add<B> for &Commitment {
     type Output = Commitment;
 
     fn add(self, rhs: B) -> Commitment {
@@ -531,7 +528,7 @@ impl Commitment {
     /// Generates a public key from a commitment
     pub fn public_key(&self) -> PublicKey {
         let mut pub_key = self.coeff[0];
-        let length = self.coeff.len() as usize;
+        let length = self.coeff.len();
         for i in 1..length {
             pub_key.add_assign(&self.coeff[i]);
         }
@@ -701,7 +698,7 @@ impl Hash for BivarCommitment {
 
 impl PartialOrd for BivarCommitment {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(&other))
+        Some(self.cmp(other))
     }
 }
 
