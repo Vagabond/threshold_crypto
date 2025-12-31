@@ -274,7 +274,7 @@ impl Signature {
     pub fn parity(&self) -> bool {
         let uncomp = self.0.into_affine().into_uncompressed();
         let xor_bytes: u8 = uncomp.as_ref().iter().fold(0, |result, byte| result ^ byte);
-        let parity = !xor_bytes.count_ones().is_multiple_of(2);
+        let parity = 0 != xor_bytes.count_ones() % 2;
         debug!("Signature: {:0.10}, parity: {}", HexFmt(uncomp), parity);
         parity
     }
