@@ -10,8 +10,9 @@ struct SignedMsg {
 impl SignedMsg {
     /// Serialize to bytes: 4-byte length prefix + message + 96-byte IETF signature
     fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(4 + self.msg.len() + SIG_SIZE);
-        bytes.extend_from_slice(&(self.msg.len() as u32).to_be_bytes());
+        let msg_len_bytes = (self.msg.len() as u32).to_be_bytes();
+        let mut bytes = Vec::with_capacity(msg_len_bytes.len() + self.msg.len() + SIG_SIZE);
+        bytes.extend_from_slice(&msg_len_bytes);
         bytes.extend_from_slice(&self.msg);
         bytes.extend_from_slice(&self.sig.to_bytes());
         bytes
