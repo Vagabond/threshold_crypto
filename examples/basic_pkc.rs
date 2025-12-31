@@ -1,6 +1,9 @@
 use std::convert::TryInto;
 use threshold_crypto::{PublicKey, SecretKey, Signature, SIG_SIZE};
 
+type LenTag = u32;
+const LEN_TAG_SIZE: usize = std::mem::size_of::<LenTag>();
+
 /// A signed message with IETF-standard serialization.
 struct SignedMsg {
     msg: Vec<u8>,
@@ -20,16 +23,16 @@ impl SignedMsg {
 
     /// Deserialize from bytes
     fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() < 4 + SIG_SIZE {
+        let (len_tag_bytes, rest) = bytes.split_at(LEN_TAG_SIZE);
+        let (msg_bytes, sig_bytes) = rest.split_at(rest.len() - SIG_SIZE);
+        let msg_len = LenTag::from_be_bytes(len_tag_bytes.try_into().ok()?) as usize;
+        if (msg_bytes.len() != msg_len) || (sig_bytes.len() != SIG_SIZE) {
             return None;
         }
-        let msg_len = u32::from_be_bytes(bytes[0..4].try_into().ok()?) as usize;
-        if bytes.len() != 4 + msg_len + SIG_SIZE {
-            return None;
-        }
-        let msg = bytes[4..4 + msg_len].to_vec();
-        let sig_bytes: [u8; SIG_SIZE] = bytes[4 + msg_len..].try_into().ok()?;
-        let sig = Signature::from_bytes(&sig_bytes).ok()?;
+        let mut sig_buf = [0; SIG_SIZE];
+        sig_buf.copy_from_slice(sig_bytes);
+        let sig = Signature::from_bytes(sig_buf).ok()?;
+        let msg = msg_bytes.to_vec();
         Some(SignedMsg { msg, sig })
     }
 }
