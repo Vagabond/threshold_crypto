@@ -1,11 +1,40 @@
-use bincode::{deserialize, serialize};
-use serde::{Deserialize, Serialize};
-use threshold_crypto::{PublicKey, SecretKey, Signature};
+use std::convert::TryInto;
+use threshold_crypto::{PublicKey, SecretKey, Signature, SIG_SIZE};
 
-#[derive(Deserialize, Serialize)]
+type LenTag = u32;
+const LEN_TAG_SIZE: usize = std::mem::size_of::<LenTag>();
+
+/// A signed message with IETF-standard serialization.
 struct SignedMsg {
     msg: Vec<u8>,
     sig: Signature,
+}
+
+impl SignedMsg {
+    /// Serialize to bytes: 4-byte length prefix + message + 96-byte IETF signature
+    fn to_bytes(&self) -> Vec<u8> {
+        let msg_len_bytes = (self.msg.len() as u32).to_be_bytes();
+        let mut bytes = Vec::with_capacity(msg_len_bytes.len() + self.msg.len() + SIG_SIZE);
+        bytes.extend_from_slice(&msg_len_bytes);
+        bytes.extend_from_slice(&self.msg);
+        bytes.extend_from_slice(&self.sig.to_bytes());
+        bytes
+    }
+
+    /// Deserialize from bytes
+    fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        let (len_tag_bytes, rest) = bytes.split_at(LEN_TAG_SIZE);
+        let (msg_bytes, sig_bytes) = rest.split_at(rest.len() - SIG_SIZE);
+        let msg_len = LenTag::from_be_bytes(len_tag_bytes.try_into().ok()?) as usize;
+        if (msg_bytes.len() != msg_len) || (sig_bytes.len() != SIG_SIZE) {
+            return None;
+        }
+        let mut sig_buf = [0; SIG_SIZE];
+        sig_buf.copy_from_slice(sig_bytes);
+        let sig = Signature::from_bytes(sig_buf).ok()?;
+        let msg = msg_bytes.to_vec();
+        Some(SignedMsg { msg, sig })
+    }
 }
 
 #[derive(Debug)]
@@ -42,14 +71,13 @@ fn main() {
     // then encrypts the signed message with Alice's public key.
     let msg = b"let's get pizza";
     let signed_msg = bob.create_signed_msg(msg);
-    let serialized = serialize(&signed_msg).expect("Failed to serialize `SignedMsg`");
+    let serialized = signed_msg.to_bytes();
     let ciphertext = alice.pk.encrypt(&serialized);
 
     // Alice receives Bob's encrypted message. She decrypts the message using her secret key. She
     // then verifies that the signature of the plaintext is valid using Bob's public key.
     let decrypted = alice.sk.decrypt(&ciphertext).expect("Invalid ciphertext");
-    let deserialized: SignedMsg =
-        deserialize(&decrypted).expect("Failed to deserialize bytes to `SignedMsg`");
+    let deserialized = SignedMsg::from_bytes(&decrypted).expect("Failed to deserialize SignedMsg");
     assert!(bob.pk.verify(&deserialized.sig, &deserialized.msg));
 
     // We assert that the message that Alice received is the same message that Bob sent.
