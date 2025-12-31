@@ -27,12 +27,12 @@ pub mod error;
 pub mod poly;
 pub mod serde_impl;
 
+use core::ops::{Add, AddAssign};
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::vec::Vec;
-use core::ops::{Add, AddAssign};
 
 use ff::Field;
 use group::{CurveAffine, CurveProjective, EncodedPoint};
@@ -216,11 +216,10 @@ impl PublicKeyShare {
 
     /// Combines two public key shares to one (basically adds the two commitments)
     pub fn combine(&self, other: PublicKeyShare) -> PublicKeyShare {
-        let mut commit = self.0.0;
-        commit.add_assign(&other.0.0);
+        let mut commit = self.0 .0;
+        commit.add_assign(&other.0 .0);
         PublicKeyShare(PublicKey(commit))
     }
-
 }
 
 /// A signature, representing a point on the G2 curve.
@@ -681,9 +680,8 @@ impl PublicKeySet {
     pub fn combine(&self, other: PublicKeySet) -> PublicKeySet {
         let mut commit = self.commit.clone();
         commit.add_assign(&other.commit);
-        PublicKeySet{ commit }
+        PublicKeySet { commit }
     }
-
 }
 
 /// A secret key and an associated set of secret key shares.
@@ -1166,7 +1164,11 @@ mod ietf_serialization_tests {
         let expected = hex::decode(IETF_G1_GENERATOR_HEX).unwrap();
         let gen_compressed = G1Affine::one().into_compressed();
         let actual: &[u8] = gen_compressed.as_ref();
-        assert_eq!(actual, expected.as_slice(), "G1 generator does not match IETF standard");
+        assert_eq!(
+            actual,
+            expected.as_slice(),
+            "G1 generator does not match IETF standard"
+        );
     }
 
     #[test]
@@ -1174,7 +1176,11 @@ mod ietf_serialization_tests {
         let expected = hex::decode(IETF_G2_GENERATOR_HEX).unwrap();
         let gen_compressed = G2Affine::one().into_compressed();
         let actual: &[u8] = gen_compressed.as_ref();
-        assert_eq!(actual, expected.as_slice(), "G2 generator does not match IETF standard");
+        assert_eq!(
+            actual,
+            expected.as_slice(),
+            "G2 generator does not match IETF standard"
+        );
     }
 
     #[test]
@@ -1183,8 +1189,15 @@ mod ietf_serialization_tests {
         let infinity = G1::zero().into_affine().into_compressed();
         let bytes: &[u8] = infinity.as_ref();
         assert_eq!(bytes.len(), PK_SIZE);
-        assert_eq!(bytes[0] & 0xe0, 0xc0, "G1 infinity must have compression + infinity flags set");
-        assert!(bytes[1..].iter().all(|&b| b == 0), "G1 infinity rest must be zeros");
+        assert_eq!(
+            bytes[0] & 0xe0,
+            0xc0,
+            "G1 infinity must have compression + infinity flags set"
+        );
+        assert!(
+            bytes[1..].iter().all(|&b| b == 0),
+            "G1 infinity rest must be zeros"
+        );
     }
 
     #[test]
@@ -1193,8 +1206,15 @@ mod ietf_serialization_tests {
         let infinity = G2::zero().into_affine().into_compressed();
         let bytes: &[u8] = infinity.as_ref();
         assert_eq!(bytes.len(), SIG_SIZE);
-        assert_eq!(bytes[0] & 0xe0, 0xc0, "G2 infinity must have compression + infinity flags set");
-        assert!(bytes[1..].iter().all(|&b| b == 0), "G2 infinity rest must be zeros");
+        assert_eq!(
+            bytes[0] & 0xe0,
+            0xc0,
+            "G2 infinity must have compression + infinity flags set"
+        );
+        assert!(
+            bytes[1..].iter().all(|&b| b == 0),
+            "G2 infinity rest must be zeros"
+        );
     }
 
     #[test]
@@ -1234,11 +1254,17 @@ mod zkcrypto_interop_tests {
 
         // Deserialize with zkcrypto/bls12_381
         let zk_point = bls12_381::G1Affine::from_compressed(&our_bytes);
-        assert!(bool::from(zk_point.is_some()), "zkcrypto failed to deserialize our G1 point");
+        assert!(
+            bool::from(zk_point.is_some()),
+            "zkcrypto failed to deserialize our G1 point"
+        );
 
         // Serialize back with zkcrypto
         let zk_bytes = zk_point.unwrap().to_compressed();
-        assert_eq!(our_bytes, zk_bytes, "roundtrip through zkcrypto changed G1 bytes");
+        assert_eq!(
+            our_bytes, zk_bytes,
+            "roundtrip through zkcrypto changed G1 bytes"
+        );
     }
 
     #[test]
@@ -1250,11 +1276,17 @@ mod zkcrypto_interop_tests {
 
         // Deserialize with zkcrypto/bls12_381
         let zk_point = bls12_381::G2Affine::from_compressed(&our_bytes);
-        assert!(bool::from(zk_point.is_some()), "zkcrypto failed to deserialize our G2 point");
+        assert!(
+            bool::from(zk_point.is_some()),
+            "zkcrypto failed to deserialize our G2 point"
+        );
 
         // Serialize back with zkcrypto
         let zk_bytes = zk_point.unwrap().to_compressed();
-        assert_eq!(our_bytes, zk_bytes, "roundtrip through zkcrypto changed G2 bytes");
+        assert_eq!(
+            our_bytes, zk_bytes,
+            "roundtrip through zkcrypto changed G2 bytes"
+        );
     }
 
     #[test]
@@ -1270,7 +1302,10 @@ mod zkcrypto_interop_tests {
 
         // Serialize back with our crate
         let our_bytes = our_pk.to_bytes();
-        assert_eq!(zk_bytes, our_bytes, "roundtrip through our crate changed G1 bytes");
+        assert_eq!(
+            zk_bytes, our_bytes,
+            "roundtrip through our crate changed G1 bytes"
+        );
     }
 
     #[test]
@@ -1286,7 +1321,10 @@ mod zkcrypto_interop_tests {
 
         // Serialize back with our crate
         let our_bytes = our_sig.to_bytes();
-        assert_eq!(zk_bytes, our_bytes, "roundtrip through our crate changed G2 bytes");
+        assert_eq!(
+            zk_bytes, our_bytes,
+            "roundtrip through our crate changed G2 bytes"
+        );
     }
 
     #[test]
