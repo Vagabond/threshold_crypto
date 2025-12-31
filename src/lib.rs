@@ -75,9 +75,20 @@ pub const PK_SIZE: usize = 48;
 #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
 pub const SIG_SIZE: usize = 96;
 
-/// A public key.
-#[derive(Deserialize, Serialize, Copy, Clone, PartialEq, Eq)]
-pub struct PublicKey(#[serde(with = "serde_impl::projective")] G1);
+/// A public key, representing a point on the G1 curve.
+///
+/// # Serialization
+///
+/// Public keys are serialized using the IETF standard for BLS12-381:
+/// - 48 bytes compressed, big-endian
+/// - Flag bits in 3 MSB of first byte:
+///   - Bit 7 (0x80): Compression flag (always set)
+///   - Bit 6 (0x40): Infinity flag
+///   - Bit 5 (0x20): Y-coordinate selection
+///
+/// Use [`to_bytes`](Self::to_bytes) and [`from_bytes`](Self::from_bytes) for serialization.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct PublicKey(G1);
 
 impl Hash for PublicKey {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -160,8 +171,10 @@ impl PublicKey {
 }
 
 /// A public key share.
+///
+/// Serialization uses the same IETF-standard format as [`PublicKey`].
 #[cfg_attr(feature = "codec-support", derive(codec::Encode, codec::Decode))]
-#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct PublicKeyShare(PublicKey);
 
 impl fmt::Debug for PublicKeyShare {
@@ -210,10 +223,21 @@ impl PublicKeyShare {
 
 }
 
-/// A signature.
+/// A signature, representing a point on the G2 curve.
+///
+/// # Serialization
+///
+/// Signatures are serialized using the IETF standard for BLS12-381:
+/// - 96 bytes compressed, big-endian
+/// - Flag bits in 3 MSB of first byte:
+///   - Bit 7 (0x80): Compression flag (always set)
+///   - Bit 6 (0x40): Infinity flag
+///   - Bit 5 (0x20): Y-coordinate selection
+///
+/// Use [`to_bytes`](Self::to_bytes) and [`from_bytes`](Self::from_bytes) for serialization.
 // Note: Random signatures can be generated for testing.
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
-pub struct Signature(#[serde(with = "serde_impl::projective")] G2);
+#[derive(Clone, PartialEq, Eq)]
+pub struct Signature(G2);
 
 impl PartialOrd for Signature {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -274,9 +298,11 @@ impl Signature {
 }
 
 /// A signature share.
+///
+/// Serialization uses the same IETF-standard format as [`Signature`].
 // Note: Random signature shares can be generated for testing.
 #[cfg_attr(feature = "codec-support", derive(codec::Encode, codec::Decode))]
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[derive(Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct SignatureShare(pub Signature);
 
 impl Distribution<SignatureShare> for Standard {
@@ -1028,16 +1054,20 @@ mod tests {
     }
 
     #[test]
-    fn test_serde() {
+    fn test_ietf_serialization() {
         let sk = SecretKey::random();
         let sig = sk.sign("Please sign here: ______");
         let pk = sk.public_key();
-        let ser_pk = bincode::serialize(&pk).expect("serialize public key");
-        let deser_pk = bincode::deserialize(&ser_pk).expect("deserialize public key");
+
+        // Test PublicKey serialization
+        let ser_pk = pk.to_bytes();
+        let deser_pk = PublicKey::from_bytes(&ser_pk).expect("deserialize public key");
         assert_eq!(ser_pk.len(), PK_SIZE);
         assert_eq!(pk, deser_pk);
-        let ser_sig = bincode::serialize(&sig).expect("serialize signature");
-        let deser_sig = bincode::deserialize(&ser_sig).expect("deserialize signature");
+
+        // Test Signature serialization
+        let ser_sig = sig.to_bytes();
+        let deser_sig = Signature::from_bytes(&ser_sig).expect("deserialize signature");
         assert_eq!(ser_sig.len(), SIG_SIZE);
         assert_eq!(sig, deser_sig);
     }
@@ -1113,5 +1143,162 @@ mod tests {
         let mut rng = ChaChaRng::from_seed(seed);
         let sk4: SecretKey = rng.sample(Standard);
         assert_eq!(sk3, sk4);
+    }
+}
+
+/// Tests verifying IETF-standard BLS12-381 serialization.
+///
+/// Reference: https://datatracker.ietf.org/doc/draft-irtf-cfrg-pairing-friendly-curves/
+#[cfg(test)]
+mod ietf_serialization_tests {
+    use super::*;
+
+    /// IETF BLS12-381 G1 generator in compressed form (48 bytes).
+    const IETF_G1_GENERATOR_HEX: &str =
+        "97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb";
+
+    /// IETF BLS12-381 G2 generator in compressed form (96 bytes).
+    const IETF_G2_GENERATOR_HEX: &str =
+        "93e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8";
+
+    #[test]
+    fn g1_generator_matches_ietf() {
+        let expected = hex::decode(IETF_G1_GENERATOR_HEX).unwrap();
+        let gen_compressed = G1Affine::one().into_compressed();
+        let actual: &[u8] = gen_compressed.as_ref();
+        assert_eq!(actual, expected.as_slice(), "G1 generator does not match IETF standard");
+    }
+
+    #[test]
+    fn g2_generator_matches_ietf() {
+        let expected = hex::decode(IETF_G2_GENERATOR_HEX).unwrap();
+        let gen_compressed = G2Affine::one().into_compressed();
+        let actual: &[u8] = gen_compressed.as_ref();
+        assert_eq!(actual, expected.as_slice(), "G2 generator does not match IETF standard");
+    }
+
+    #[test]
+    fn g1_point_at_infinity() {
+        // Point at infinity: compression flag (0x80) + infinity flag (0x40) = 0xc0
+        let infinity = G1::zero().into_affine().into_compressed();
+        let bytes: &[u8] = infinity.as_ref();
+        assert_eq!(bytes.len(), PK_SIZE);
+        assert_eq!(bytes[0] & 0xe0, 0xc0, "G1 infinity must have compression + infinity flags set");
+        assert!(bytes[1..].iter().all(|&b| b == 0), "G1 infinity rest must be zeros");
+    }
+
+    #[test]
+    fn g2_point_at_infinity() {
+        // Point at infinity: compression flag (0x80) + infinity flag (0x40) = 0xc0
+        let infinity = G2::zero().into_affine().into_compressed();
+        let bytes: &[u8] = infinity.as_ref();
+        assert_eq!(bytes.len(), SIG_SIZE);
+        assert_eq!(bytes[0] & 0xe0, 0xc0, "G2 infinity must have compression + infinity flags set");
+        assert!(bytes[1..].iter().all(|&b| b == 0), "G2 infinity rest must be zeros");
+    }
+
+    #[test]
+    fn public_key_flag_bits() {
+        let sk = SecretKey::random();
+        let pk = sk.public_key();
+        let bytes = pk.to_bytes();
+        assert_eq!(bytes.len(), PK_SIZE);
+        assert!(bytes[0] & 0x80 != 0, "Compression flag (0x80) must be set");
+        assert!(bytes[0] & 0x40 == 0, "Infinity flag (0x40) must be clear");
+    }
+
+    #[test]
+    fn signature_flag_bits() {
+        let sk = SecretKey::random();
+        let sig = sk.sign(b"test message");
+        let bytes = sig.to_bytes();
+        assert_eq!(bytes.len(), SIG_SIZE);
+        assert!(bytes[0] & 0x80 != 0, "Compression flag (0x80) must be set");
+        assert!(bytes[0] & 0x40 == 0, "Infinity flag (0x40) must be clear");
+    }
+}
+
+/// Interoperability tests with the zkcrypto/bls12_381 crate.
+///
+/// Verifies that serialized points can be deserialized by both implementations.
+#[cfg(test)]
+mod zkcrypto_interop_tests {
+    use super::*;
+
+    #[test]
+    fn g1_roundtrip_to_zkcrypto() {
+        // Generate a random public key with our crate
+        let sk = SecretKey::random();
+        let pk = sk.public_key();
+        let our_bytes = pk.to_bytes();
+
+        // Deserialize with zkcrypto/bls12_381
+        let zk_point = bls12_381::G1Affine::from_compressed(&our_bytes);
+        assert!(bool::from(zk_point.is_some()), "zkcrypto failed to deserialize our G1 point");
+
+        // Serialize back with zkcrypto
+        let zk_bytes = zk_point.unwrap().to_compressed();
+        assert_eq!(our_bytes, zk_bytes, "roundtrip through zkcrypto changed G1 bytes");
+    }
+
+    #[test]
+    fn g2_roundtrip_to_zkcrypto() {
+        // Generate a random signature with our crate
+        let sk = SecretKey::random();
+        let sig = sk.sign(b"test message");
+        let our_bytes = sig.to_bytes();
+
+        // Deserialize with zkcrypto/bls12_381
+        let zk_point = bls12_381::G2Affine::from_compressed(&our_bytes);
+        assert!(bool::from(zk_point.is_some()), "zkcrypto failed to deserialize our G2 point");
+
+        // Serialize back with zkcrypto
+        let zk_bytes = zk_point.unwrap().to_compressed();
+        assert_eq!(our_bytes, zk_bytes, "roundtrip through zkcrypto changed G2 bytes");
+    }
+
+    #[test]
+    fn g1_roundtrip_from_zkcrypto() {
+        // Generate a random G1 point with zkcrypto using scalar multiplication
+        let zk_scalar = bls12_381::Scalar::from(12345678u64);
+        let zk_point = bls12_381::G1Affine::generator() * zk_scalar;
+        let zk_affine = bls12_381::G1Affine::from(zk_point);
+        let zk_bytes = zk_affine.to_compressed();
+
+        // Deserialize with our crate
+        let our_pk = PublicKey::from_bytes(&zk_bytes).expect("failed to deserialize zkcrypto G1");
+
+        // Serialize back with our crate
+        let our_bytes = our_pk.to_bytes();
+        assert_eq!(zk_bytes, our_bytes, "roundtrip through our crate changed G1 bytes");
+    }
+
+    #[test]
+    fn g2_roundtrip_from_zkcrypto() {
+        // Generate a random G2 point with zkcrypto using scalar multiplication
+        let zk_scalar = bls12_381::Scalar::from(12345678u64);
+        let zk_point = bls12_381::G2Affine::generator() * zk_scalar;
+        let zk_affine = bls12_381::G2Affine::from(zk_point);
+        let zk_bytes = zk_affine.to_compressed();
+
+        // Deserialize with our crate
+        let our_sig = Signature::from_bytes(&zk_bytes).expect("failed to deserialize zkcrypto G2");
+
+        // Serialize back with our crate
+        let our_bytes = our_sig.to_bytes();
+        assert_eq!(zk_bytes, our_bytes, "roundtrip through our crate changed G2 bytes");
+    }
+
+    #[test]
+    fn generators_match_zkcrypto() {
+        // G1 generator
+        let zk_g1 = bls12_381::G1Affine::generator().to_compressed();
+        let our_g1 = G1Affine::one().into_compressed();
+        assert_eq!(zk_g1, our_g1.as_ref(), "G1 generators don't match");
+
+        // G2 generator
+        let zk_g2 = bls12_381::G2Affine::generator().to_compressed();
+        let our_g2 = G2Affine::one().into_compressed();
+        assert_eq!(zk_g2, our_g2.as_ref(), "G2 generators don't match");
     }
 }
