@@ -11,9 +11,7 @@ impl codec::Decode for PublicKey {
     fn decode<I: codec::Input>(value: &mut I) -> std::result::Result<Self, codec::Error> {
         let mut bytes = [0u8; PK_SIZE];
         value.read(&mut bytes)?;
-        PublicKey::from_bytes(&bytes).map_err(|_| {
-            codec::Error::from("invalid public key bytes")
-        })
+        PublicKey::from_bytes(&bytes).map_err(|_| codec::Error::from("invalid public key bytes"))
     }
 }
 
@@ -28,9 +26,7 @@ impl codec::Decode for Signature {
     fn decode<I: codec::Input>(value: &mut I) -> std::result::Result<Self, codec::Error> {
         let mut bytes = [0u8; SIG_SIZE];
         value.read(&mut bytes)?;
-        Signature::from_bytes(&bytes).map_err(|_| {
-            codec::Error::from("invalid signature bytes")
-        })
+        Signature::from_bytes(&bytes).map_err(|_| codec::Error::from("invalid signature bytes"))
     }
 }
 

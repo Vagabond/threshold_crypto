@@ -164,9 +164,9 @@ impl Node {
         };
         self.pending
             .entry(user_id)
-            .or_insert_with(BTreeMap::new)
+            .or_default()
             .entry(msg)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(sig);
     }
 }

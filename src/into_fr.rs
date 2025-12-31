@@ -49,7 +49,7 @@ impl IntoFr for i64 {
     }
 }
 
-impl<'a, T: IntoFr> IntoFr for &'a T {
+impl<T: IntoFr> IntoFr for &T {
     fn into_fr(self) -> Fr {
         (*self).into_fr()
     }

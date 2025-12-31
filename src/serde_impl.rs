@@ -6,7 +6,7 @@ use std::borrow::Cow;
 use std::ops::Deref;
 
 use crate::G1;
-use crate::{IntoFr, Fr};
+use crate::{Fr, IntoFr};
 use serde::de::Error as DeserializeError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -37,10 +37,7 @@ mod serialize_secret_internal {
 
 /// A serializable wrapper for Fr
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
-pub struct WireFr(
-    #[serde(with = "super::serde_impl::field_element")]
-    Fr
-);
+pub struct WireFr(#[serde(with = "super::serde_impl::field_element")] Fr);
 
 /// Allow converting WireFr to Fr
 impl IntoFr for WireFr {
@@ -114,7 +111,7 @@ impl<'de> Deserialize<'de> for crate::SecretKey {
             Ok(x) => x,
             Err(ff::PrimeFieldDecodingError::NotInField(_)) => {
                 return Err(de::Error::invalid_value(
-                    de::Unexpected::Other(&"Number outside of prime field."),
+                    de::Unexpected::Other("Number outside of prime field."),
                     &"Valid prime field element.",
                 ));
             }
@@ -336,7 +333,6 @@ pub(crate) mod field_element {
         let wrap_field = <FieldWrap<Fr>>::deserialize(d)?;
         Ok(wrap_field.into_inner())
     }
-
 }
 
 /// Serialization and deserialization of vectors of field elements.
@@ -486,15 +482,22 @@ mod tests {
 
     #[test]
     fn wire_fr() {
-        use crate::serde_impl::WireFr;
         use super::IntoFr;
+        use crate::serde_impl::WireFr;
 
         let samples = vec![-8, 0, 40, 136, 5, 628];
         for &x in &samples {
             let wire_fr: WireFr = WireFr::from_fr(x.into_fr());
             let ser_fr = bincode::serialize(&wire_fr).expect("cannot serialize wire_fr");
-            let deser_fr: WireFr = bincode::deserialize(&ser_fr).expect("cannot deserialize wire_fr");
-            println!("y_int: {:?}, fr: {:?}, ser_fr: {:?}, deser_fr: {:?}", x, x.into_fr(), ser_fr, deser_fr.into_fr());
+            let deser_fr: WireFr =
+                bincode::deserialize(&ser_fr).expect("cannot deserialize wire_fr");
+            println!(
+                "y_int: {:?}, fr: {:?}, ser_fr: {:?}, deser_fr: {:?}",
+                x,
+                x.into_fr(),
+                ser_fr,
+                deser_fr.into_fr()
+            );
             assert_eq!(x.into_fr(), deser_fr.into_fr());
         }
     }
